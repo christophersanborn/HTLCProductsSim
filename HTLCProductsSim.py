@@ -14,14 +14,16 @@
 #   class Account      - A collection of quantities of currencies
 #   class OracleHash   - A "hash" with a condition on preimage revelation
 #   class HashTranche  - An HTLC contract using an OracleHash
-#   class Contract     - A collection of HashTranches and destination accounts
+#   class Contract ... - A collection of HashTranches and destination accounts.
+#                        May also be populated with metadata to guide plotting
+#                        and introspection of contracts.
 #
 # Import with:
 #
 #   from HTLCProductsSim import *
 #
 # Suggested approach: Derive specialized contracts from Contract. See
-# ExampleContract.py for an example.
+# BoundedStableCoin.py for an example.
 #
 #.
 
@@ -78,6 +80,11 @@ class Price:
         self.price = price
         self.pair = Pair(pairstring)
 
+    @staticmethod
+    def linspace(start, finish, numel, pairstring):
+        prices = [start + (finish-start)*i/(numel-1) for i in range(numel)]
+        return [Price(p, pairstring) for p in prices]
+
     def __str__(self):
         return "%g %s" % (self.price, self.pair)
 
@@ -85,7 +92,11 @@ class Price:
         return Price(1/self.price, str(self.pair.swap()))
 
     def express(self, pairstring):
-        pass
+        raise Unimplemented from ValueError
+
+    def __mul__(self, other):  # multiplication by a scalar
+        return Price(float(other) * self.price, str(self.pair))
+    __rmul__=__mul__
 
     def __gt__(self, other):
         if not self.pair.same(other.pair):
@@ -157,10 +168,35 @@ class AssetBag:
                 return AssetBag(self.amount * price.price, quote)
         raise ValueError("No compatible price found in knownprices")
 
+    def __mul__(self, other):
+        return AssetBag(float(other)*self.amount, self.symbol)
+    __rmul__ = __mul__
+
+    def __add__(self, other):
+        if not self.compatible(other):
+            raise ValueError("Incompatible assets")
+        return AssetBag(self.amount + other.amount, self.symbol)
+
+    def __sub__(self, other):
+        if not self.compatible(other):
+            raise ValueError("Incompatible assets")
+        return AssetBag(self.amount - other.amount, self.symbol)
+
     def __str__(self):
         if self.symbol in AssetBag.precisions:
             return '{0:0.{p}f} {1}'.format(self.amount, self.symbol, p=AssetBag.precisions[self.symbol])
         return "%g %s" % (self.amount, self.symbol)
+
+    def __gt__(self, other):
+        if not self.compatible(other):
+            raise ValueError("Incompatible assets")
+        return self.amount > other.amount
+    def __lt__(self, other):
+        return other > self
+    def __ge__(self, other):
+        return not other > self
+    def __le__(self, other):
+        return not self > other
 
     @classmethod
     def setPrecision(cls, symbol, prec):
@@ -197,6 +233,10 @@ class Account:
     #
     # A list of AssetBags, essentially
     #
+    # Note that Contract objects may add baggage to the account in the form of
+    # additional members.  These serve as metadata for studies and for plotting
+    # and describing contracts.
+    #
     def __init__(self):
         self.bags = []
 
@@ -216,6 +256,14 @@ class Account:
         for bag in self.bags:
             value.absorb(bag.valuation(quote, knownprices))
         return value
+
+    def copy(self):
+        # Returns a deep copy of the Account, stripping any additional baggage
+        # added by, e.g., Contract objects.
+        retval  = Account()
+        for bag in self.bags:
+            retval.receive(bag.clone())
+        return retval
 
     def prettyPrint(self, quote = None, knownprices = None):
         for bag in self.bags:
@@ -328,6 +376,8 @@ class HashTranche:
         else:
             raise ValueError("No compatible price in knownprices")
 
+    def __str__(self):
+        return "%s \t%s"%(str(self.asset), str(self.ohash))
 
 class Contract:
     #
@@ -355,6 +405,48 @@ class Contract:
         self.pricelistcache = finalprices
         for t in self.tranches:
             t.disburse(finalprices)
+
+    def doStudy_deprecated(self, varprices, quote, fixedprices = []): # mutates
+        # varprices: list of prices spanning a range (becomes X values)
+        # fixedprices: additional external price data (parameters other than X), if any
+        YY = []
+        for _ in range(len(self.accounts)):
+            YY.append([])
+        for pr in varprices:
+            self.reset()
+            self.conclude([pr]+fixedprices)
+            for i in range(len(self.accounts)):
+                YY[i].append(self.accounts[i].valuation(quote, self.pricelistcache))
+        return YY
+
+    def doStudy(self, varprices, fixedprices = []): # mutates
+        # For each account in contract:
+        #   Make a list of account copies "concluded" at each price in varprices
+        #
+        # varprices: list of prices spanning a range (becomes X values)
+        # fixedprices: additional external price data (parameters other than X), if any
+        #
+        # Creates following new structure in Contract object, which can be interpreted
+        # by the plotting subsystem:
+        #
+        #   (Contract).StudyX = [a Price series]
+        #   (Contract).StudyPriceEnv
+        #   (Contract).accounts[...].StudyResults = [ series of Account copies ]
+        #
+        for ac in self.accounts:
+            ac.StudyResults = []
+        for pr in varprices:
+            self.reset()
+            self.conclude([pr]+fixedprices)
+            for ac in self.accounts:
+                ac.StudyResults.append(ac.copy())
+        self.StudyX = varprices
+        self.StudyPriceEnv = fixedprices
+
+    def printTrancheTable(self):
+        print ("TrancheTable contains %d slices." % len(self.tranches))
+        for tr in self.tranches:
+            print (tr)
 
     def printAccountValuesLine(self, quote, firstcoltext="", colwidth = 16, printHeader=False):
         if printHeader:
