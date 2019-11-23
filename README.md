@@ -22,5 +22,8 @@ blah blah blah
 
 ### Bounded Stable Coin and corresponding Variability
 
-[figs]
+![fig1](doc/BSC_Stability_USD.png)
 
+![fig2](doc/BSC_Stability_BTS.png)
+
+![fig3](doc/BSC_Variability_BTS.png)
