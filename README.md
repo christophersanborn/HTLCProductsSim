@@ -32,6 +32,8 @@ Two HTLCs, each predicated on the same hash, for which preimage will be revealed
 
 ### Bounded Stable Coin and corresponding Variability
 
+A collection of several HTLCs from party A to party B, each triggered at a different price level, and for an amount crafted to bring the "stable" product back into it's target valuation window.
+
 ![fig2](doc/BSC_Stability_USD.png)
 
 ![fig3](doc/BSC_Stability_BTS.png)
