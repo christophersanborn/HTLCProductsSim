@@ -22,6 +22,12 @@ blah blah blah
 
 ### Atomic Swaps as Call Options
 
+Two HTLCs, each predicated on the same hash, for which preimage will be revealed only if share price on underlying exceeds strike price:
+
+* HTLC 1: From Buyer to Writer for 500 USD
+* HTLC 2: From Writer to Buyer for 1000 BTS
+* Srike price at 0.05 BTS:USD
+
 ![fig1](doc/LongCall.png)
 
 ### Bounded Stable Coin and corresponding Variability
