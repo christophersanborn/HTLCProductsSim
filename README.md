@@ -20,10 +20,14 @@ blah blah blah
 
 ## Examples
 
+### Atomic Swaps as Call Options
+
+![fig1](doc/LongCall.png)
+
 ### Bounded Stable Coin and corresponding Variability
 
-![fig1](doc/BSC_Stability_USD.png)
+![fig2](doc/BSC_Stability_USD.png)
 
-![fig2](doc/BSC_Stability_BTS.png)
+![fig3](doc/BSC_Stability_BTS.png)
 
-![fig3](doc/BSC_Variability_BTS.png)
+![fig4](doc/BSC_Variability_BTS.png)
