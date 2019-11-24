@@ -16,7 +16,7 @@ Products using the hashes could mitigate risk by conditioning their contracts on
 
 ## HTLC Products as Options
 
-blah blah blah
+(background and explanation...)
 
 ## Examples
 
