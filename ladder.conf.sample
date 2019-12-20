@@ -1,0 +1,11 @@
+[default]
+# secret: The hashes will derive from this.  Set it to a really good
+# random ascii string of at least 64 random characters or at least 25
+# random words.
+secret = "SomeReallyGoodRandomSecretAphrobatJalamazooSeraphicLaryngopsZazzletoe"
+
+[priceladderdown]
+factor = 0.5
+steps = 24
+decades = 5
+
