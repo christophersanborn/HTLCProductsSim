@@ -4,8 +4,14 @@
 # random words.
 secret = "SomeReallyGoodRandomSecretAphrobatJalamazooSeraphicLaryngopsZazzletoe"
 
-[priceladderdown]
+[BTC:USD]
 factor = 0.5
 steps = 24
 decades = 5
+precision=2
 
+[BTS:USD]
+factor = 0.5
+steps = 24
+decades = 7
+precision=5
