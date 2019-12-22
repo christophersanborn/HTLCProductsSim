@@ -6,6 +6,11 @@ import datetime
 import hashlib
 import sys
 
+warningtext = ("_**WARNING:** This is an EXPERIMENTAL Hash Oracle. At this point in time, " +
+               "there is NO WARRANTY of any kind, nor any promise or commitment, implied or otherwise, " +
+               "as to the reliability, accuracy, or timeliness of the information in this " +
+               "post or in any future post concomitant to this one._")
+
 class HashLadder:
 
     def __init__(self, meta, rootHash, numDecades = 5):
@@ -56,7 +61,6 @@ class HashLadder:
         self.hashes = hashes
 
     def printPublicTable(self, precision=5):
-        warningtext = "_**WARNING:** This is an EXPERIMENTAL Hash Oracle. At this point in time, there is NO WARRANTY of any kind, nor any promise or commitment, implied or otherwise, as to the reliability, accuracy, or timeliness of the information in this post or in any future post concomitant to this one._"
         print("=========== Advanced-Published Hash Table: (Copy-Paste to Steemit, e.g.) ===========")
         print("")
         print("## %s Hash Ladder (%s):" % (
@@ -125,6 +129,7 @@ class HashLadder:
         print("**Generator:** `%s`" % generator)
         print("**Observed Price:** %s" % ("%%0.%df"%precision)%obsprice)
         print("")
+        print("%s\n"%warningtext)
         print("Begin Table:")
         print("")
         print("P<sub>obs</sub> | P<sub>hash</sub> | Preimage:")
@@ -134,6 +139,7 @@ class HashLadder:
                                    pi.hex() if obsprice >= pr else "(Condition not met)"
                                    # TODO: don't define condition eval here - this is only for descending tables
             ))
+        print("\n%s"%warningtext)
 
 
 class PriceLadderMetaData:
