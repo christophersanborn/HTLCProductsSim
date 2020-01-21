@@ -63,18 +63,19 @@ class HashLadder:
     def printPublicTable(self, precision=5):
         print("=========== Advanced-Published Hash Table: (Copy-Paste to Steemit, e.g.) ===========")
         print("")
-        print("## %s Hash Ladder (%s):" % (
-            str(self.meta.pair),
-            self.meta.targetdate.strftime("%y%m%d")
+        print("(Preamble text, if any.)\n")
+        print("## Hash Table: [%s] (Target:%s):" % (
+            str(self.meta.pair), self.meta.targetdate.strftime("%Y-%m-%d")
         ))
+        print("\nThis is a table of base16-encoded SHA-256 hashes upon which HTLC contracts may be built. "
+              "Pending conditions described below, some, none, or all of the 256-bit (32-byte) "
+              "base16-encoded preimages may be revealed at appointed times.")
         print("")
-        print("**Target Date:** %s" % self.meta.targetdate.strftime("%b %d %Y (%Y-%m-%d)"))
-        print("**Event to Report:** Price of %s as determined on target date."%self.meta.pair.base)
-        if self.meta.factor < 1:
-            print("**Reporting Method:** Reveal preimages for all hashes for which observed price meets or exceeds hash level.")
-        else:
-            print("**Reporting Method:** Reveal preimages for all hashes for which observed price meets is at or below hash level.")
-        print("**Determination Method:** (Described in detail elsewhere.)")
+        print("**Target Date:**\n * %s\n" % self.meta.targetdate.strftime("%b %d %Y (%Y-%m-%d)"))
+        print("**Event to Report:**\n * %s\n" % self.meta.eventdesc)
+        print("**Reporting Method:**\n * %s\n" % self.meta.reportmethod)
+        print("**Determination Method:**\n * %s\n" % self.meta.determination)
+        print("**Time Frame:**\n * %s\n" % self.meta.timeframe)
         print("**Quote Pair:** %s"%str(self.meta.pair))
         print("**Hash Header:** `%s`"%self.meta.header)
         print("**Num Hashes:** %d (%d %s, %d steps each)" % (
@@ -98,9 +99,6 @@ class HashLadder:
 
     def printRevealTable(self, obsprice, precision=5):
         #
-        print("=========== Observation Preimage Table: (Copy-Paste to Steemit, e.g.) ===========")
-        print("")
-        #
         if self.meta.factor > 1:
             print("Oops: Ascending tables not supported yet.")
             return
@@ -112,18 +110,21 @@ class HashLadder:
                 generator = self.pretexts[i]
                 break
         #
-        print("## %s Preimage Reveal Table (%s):"% (
-            str(self.meta.pair),
-            self.meta.targetdate.strftime("%y%m%d")
+        print("=========== Observation Preimage Table: (Copy-Paste to Steemit, e.g.) ===========")
+        print("\n(Preamble text, if any. "
+              "NOTE: BE SURE TO FILL OUT BACK REFERENCE URL BELOW. "
+              "This should link back to original hash table.)\n")
+        print("## Preimage Reveal Table [%s] (%s):"% (
+            str(self.meta.pair), self.meta.targetdate.strftime("%Y-%m-%d")
         ))
+        print("\nThis is a table of base16-encoded 256-bit (32 byte) preimages, corresponding to a previously-published table of _hashes_.")
         print("")
-        print("**Target Date:** %s" % self.meta.targetdate.strftime("%b %d %Y (%Y-%m-%d)"))
-        print("**Event Reported:** Price of %s as determined on target date."%self.meta.pair.base)
-        if self.meta.factor < 1:
-            print("**Reporting Method:** Reveal preimages for all hashes for which observed price meets or exceeds hash level.")
-        else:
-            print("**Reporting Method:** Reveal preimages for all hashes for which observed price meets is at or below hash level.")
-        print("**Determination Method:** (Described in detail elsewhere.)")
+        print("**Hash Table URL:**\n <PASTE URL HERE>\n")
+        print("**Target Date:**\n * %s\n" % self.meta.targetdate.strftime("%b %d %Y (%Y-%m-%d)"))
+        print("**Event Reported:**\n * %s\n" % self.meta.eventdesc)
+        print("**Reporting Method:**\n * %s\n" % self.meta.reportmethod)
+        print("**Determination Method:**\n * %s\n" % self.meta.determination)
+        print("**Time Frame:**\n * %s\n" % self.meta.timeframe)
         print("**Quote Pair:** %s"%str(self.meta.pair))
         print("**Hash Header:** `%s`"%self.meta.header)
         print("**Generator:** `%s`" % generator)
@@ -144,7 +145,9 @@ class HashLadder:
 
 class PriceLadderMetaData:
 
-    def __init__(self, targetDate, originPrice, decadeFactor=0.5, decadeSteps=8):
+    def __init__(self, targetDate, originPrice, decadeFactor=0.5, decadeSteps=8,
+                 eventdesc = "Price of X as determined on target date.",
+                 reportmethod = "", determination = "", timeframe = ""):
 
         if isinstance(targetDate, str):
             targetDate = datetime.datetime.strptime(targetDate, "%y%m%d")
@@ -156,6 +159,10 @@ class PriceLadderMetaData:
         self.normfactor = decadeFactor if decadeFactor >= 1 else (1/decadeFactor)
         self.steps = decadeSteps
         self.gele = ">=" if decadeFactor<1 else "<="
+        self.eventdesc = eventdesc
+        self.reportmethod = reportmethod
+        self.determination = determination
+        self.timeframe = timeframe
 
         # Header Format:
         #  YYMMDD(HH):[gele]:BASE:QUOTE:startprice:FACTOR:STEPS
@@ -211,41 +218,52 @@ def getDecadeSteps(factor=10, steps=10):
     return result
 
 
+AppDesc = """Hash Ladder Tool:\n
+  Usage:    python3 %s <target_date> <top_price> <tag> [reveal_price]\n
+            Pair and Tag-specific config option are read from the config file
+            (ladder.conf) in section [<pair> <tag>].\n
+  Example:  python3 %s "200110" "0.50 BTS:USD" Down\n
+            Prints descending hash table (no preimages) for Jan 10, 2020 BTS:USD
+            market, taking options from [BTS:USD Down] section.\n
+  Example:  python3 %s "200110" "32000 BTC:USD" Down 7965.37\n
+            Prints preimage table for BTC:USD observed price of 7965.37\n
+"""%(sys.argv[0], sys.argv[0], sys.argv[0])
+
 if __name__ == "__main__":
 
-    if len(sys.argv) < 3:
-        print("\nHash Ladder Tool:")
-        print()
-        print("  Usage:    python3 %s <target_date> <top_price> [reveal_price]"%sys.argv[0])
-        print()
-        print("  Example:  python3 %s \"200110\" \"0.50 BTS:USD\""%sys.argv[0])
-        print("\n            Prints hash table (no preimages) for Jan 10, 2020 BTS:USD market.")
-        print()
-        print("  Example:  python3 %s \"200110\" \"32000 BTC:USD\" 7965.37"%sys.argv[0])
-        print("\n            Prints preimage table for BTC:USD observed price of 7965.37")
-        print()
-        print("  Be sure file 'ladder.conf' exists and has a good random secret.\n")
+    if len(sys.argv) < 4:
+        print(AppDesc)
         quit()
 
     targetdate = sys.argv[1]    # e.g. "200110" for Jan 10, 2020
     topprice = sys.argv[2]      # e.g. "32000 BTC:USD"
-    observedprice = float(sys.argv[3]) if len(sys.argv)>3 else None
+    tagstring = sys.argv[3]     # e.g. "Down" for descending table
+    observedprice = float(sys.argv[4]) if len(sys.argv)>4 else None
 
     topP = Price(topprice)
-    cfgsection = str(topP.pair)
+    cfgsection = str(topP.pair)+" "+tagstring
 
     cfg = configparser.ConfigParser()
     cfg.read('ladder.conf')
+    kwoptions = {}
     try:
-        secrettxt = cfg['default']['secret']
+        secrettxt = cfg['default']['secret'].strip('"')
+    except:
+        print ("Could not read hash secret from config file. Does ladder.conf exist?")
+        quit()
+    try:
         decadefactor = float(cfg[cfgsection]['factor'])
         decadesteps = int(cfg[cfgsection]['steps'])
         numdecades = int(cfg[cfgsection]['decades'])
         prec = int(cfg[cfgsection]['precision'])
+        for kwkey in ["eventdesc", "reportmethod", "determination", "timeframe"]:
+            kwoptions[kwkey] = cfg[cfgsection][kwkey].strip('"')
     except:
-        raise ValueError("Config file missing or a necessary value missing.")
+        print("Could not read option '%s' from config section [%s]."%(kwkey, cfgsection))
+        quit()
 
-    meta = PriceLadderMetaData(targetdate, topP, decadefactor, decadesteps)
+    meta = PriceLadderMetaData(targetdate, topP, decadefactor, decadesteps,
+                               **kwoptions)
     ladder_root = meta.getRootHash(secrettxt)
     H = HashLadder(meta, ladder_root, numdecades)
 
