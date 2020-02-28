@@ -40,7 +40,8 @@ if __name__ == "__main__":
     observedprice = float(sys.argv[4]) if len(sys.argv)>4 else None
 
     topP = Price(topprice)
-    cfg = configparser.ConfigParser()
+    cfgdefaults = {"bidirectional":"False"}
+    cfg = configparser.ConfigParser(cfgdefaults)
     cfg.read(cfgfile)
     section = str(topP.pair)+" "+tagstring
 
@@ -51,7 +52,10 @@ if __name__ == "__main__":
         quit()
 
     HT = HashTable(targetdate, topP, secrettxt, cfg[section])
-    FT = HashTableMDFormatter(HT)
+    HT2 = None
+    if (cfg.getboolean(section,'bidirectional')):
+        HT2 = HashTable(targetdate, topP, secrettxt, cfg[section], flip=True)
+    FT = HashTableMDFormatter(HT, HT2)
 
     print ("((( An oracle SECRET was read from file '%s'.\n"%cfgfile)
     HT.printFingerprint()

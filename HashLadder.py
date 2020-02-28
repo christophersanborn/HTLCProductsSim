@@ -110,12 +110,12 @@ class HashTable:
         pass
 
     def __init__(self, targetdate, leadprice, secret, cfgsection,
-                 hash_function=hashlib.sha256):
+                 flip=False, hash_function=hashlib.sha256):
 
         if isinstance(targetdate, str):
             targetdate = datetime.datetime.strptime(targetdate, "%y%m%d")
         self.date = targetdate
-        self.leadprice = leadprice.price
+        self.leadprice = leadprice.price  # Unless flip is true, see below
         self.pair = leadprice.pair
 
         self.cfg = cfgsection   # A ConfigParser section.
@@ -127,6 +127,11 @@ class HashTable:
         self.reportmethod =  self.TryReadCfgOpt('reportmethod')
         self.determination = self.TryReadCfgOpt('determination')
         self.timeframe    =  self.TryReadCfgOpt('timeframe')
+
+        self.tailprice = self.leadprice * self.decadefactor ** self.numdecades
+        if (flip):  # then swap lead and tail to flip direction of table
+            self.leadprice, self.tailprice = self.tailprice, self.leadprice
+            self.decadefactor = 1/self.decadefactor
 
         self.ascending    =  (self.decadefactor > 1)
         self.descending   =  (self.decadefactor < 1)
@@ -247,11 +252,11 @@ class HashTableMDFormatter:
                "otherwise, as to the reliability, accuracy, or timeliness of the information " +
                "in this post or in any future post concomitant to this one._")
 
-    Template_HashTable_Public = textwrap.dedent("""
+    Template_HashTable_Public_Intro = textwrap.dedent("""
     (Preamble text, if any.)\n
-    ## Hash Table: [%(pair)s] (Target:%(date_long)s):
+    ## Hash Table(s): [%(pair)s] (Target:%(date_long)s):
 
-    This is a table of base16-encoded SHA-256 hashes upon which HTLC contracts may
+    These are tables of base16-encoded SHA-256 hashes upon which HTLC contracts may
     be built. Pending conditions described below, some, none, or all of the 256-bit
     (32-byte) base16-encoded preimages may be revealed at appointed times.
 
@@ -266,6 +271,10 @@ class HashTableMDFormatter:
     **Time Frame:**
      * %(timeframe)s\n
     **Quote Pair:** %(pair)s\n
+    """).strip("\n")+"\n\n"
+
+    Template_HashTable_Public_Table = textwrap.dedent("""
+    ### %(sequenceword)s Table:\n
     **Hash Header:** `%(header)s`\n
     **Simple Merkle Root:** `%(merkleroot)s`\n
     **Num Hashes:** %(numhashes)d (%(numdecades)d %(decadeword)s, %(steps)d steps each)\n
@@ -276,13 +285,13 @@ class HashTableMDFormatter:
     -|-:|-
     """).strip("\n")+"\n"
 
-    Template_PreimageTable_Reveal = textwrap.dedent("""
+    Template_PreimageTable_Reveal_Intro = textwrap.dedent("""
     (Preamble text, if any.)
     NOTE: BE SURE TO FILL OUT BACK REFERENCE URL BELOW.
     (This should link back to original hash table.)\n
-    ## Preimage Reveal Table [%(pair)s] (%(date_long)s):\n
-    This is a table of base16-encoded 256-bit (32 byte) preimages,
-    corresponding to a previously-published table of _hashes_.\n
+    ## Preimage Reveal Table(s): [%(pair)s] (%(date_long)s):\n
+    These are tables of base16-encoded 256-bit (32 byte) preimages,
+    corresponding to a previously-published table(s) of _hashes_.\n
     **Hash Table URL:**
      <PASTE URL HERE>\n
     **Target Date:**
@@ -296,10 +305,14 @@ class HashTableMDFormatter:
     **Time Frame:**
      * %(timeframe)s\n
     **Quote Pair:** %(pair)s\n
+    **Observed Price:** %(obsprice)s\n
+    """).strip("\n")+"\n\n"
+
+    Template_PreimageTable_Reveal_Table = textwrap.dedent("""
+    ### %(sequenceword)s Table:\n
     **Hash Header:** `%(header)s`\n
     **Simple Merkle Root:** `%(merkleroot)s`\n
     **Generator:** `%(generator)s`\n
-    **Observed Price:** %(obsprice)s\n
     """+warningtext+"""\n
     Begin Table:\n
     P<sub>obs</sub> | P<sub>hash</sub> | Preimage:
@@ -309,43 +322,63 @@ class HashTableMDFormatter:
     Template_Hashes_TableRow = "%s | %s | %s\n"
     Template_Preimage_TableRow = "%s | %s | %s\n"
 
-    def __init__(self, HTobj):
+    def __init__(self, HTobj, HTobj_alt=None):
         self.HT = HTobj
+        self.HT2 = HTobj_alt  # Usually a bottom-up pair to a top-down chart.
 
-    def getContext(self):
+    def getContext(self, HT, obsprice=None):
         # Get dictionary of template variables, starting with the HashTable
         # dictionary and supplementing with some additional values:
         context = {}
-        context.update(self.HT.__dict__)
+        context.update(HT.__dict__)
         context.update({
-            "date_long": self.HT.date.strftime("%Y-%m-%d"),
-            "date_verbose": self.HT.date.strftime("%b %d %Y (%Y-%m-%d)"),
-            "resskip1": self.HT.getResolutionPct(1),
-            "resskip2": self.HT.getResolutionPct(2),
-            "merkleroot": self.HT.merkleroot.hex(), # Replace/reformat as string
+            "date_long": HT.date.strftime("%Y-%m-%d"),
+            "date_verbose": HT.date.strftime("%b %d %Y (%Y-%m-%d)"),
+            "resskip1": HT.getResolutionPct(1),
+            "resskip2": HT.getResolutionPct(2),
+            "merkleroot": HT.merkleroot.hex(), # Replace/reformat as string
+            "sequenceword": "Ascending" if HT.ascending else "Descending" if HT.descending else "Unsequenced"
         })
+        if (obsprice is not None):
+            context.update({"obsprice": ("%%0.%df"%HT.priceprec)%obsprice,
+                            "generator": HT.getGenerator(obsprice)})
         return context
 
     def constructPublicHashTableText(self):
-        context = self.getContext()
-        table_string = HashTableMDFormatter.Template_HashTable_Public % context
+        context = self.getContext(self.HT)
+        table_string  = HashTableMDFormatter.Template_HashTable_Public_Intro % context
+        table_string += HashTableMDFormatter.Template_HashTable_Public_Table % context
         for pr, h in zip(self.HT.prices, self.HT.ladder.hashes):
             table_string+=HashTableMDFormatter.Template_Hashes_TableRow % (
                 self.HT.gele, ("%%0.%df"%self.HT.priceprec)%pr, h.hex()
             )
+        if (self.HT2 is not None):
+            context = self.getContext(self.HT2)
+            table_string += "\n" + HashTableMDFormatter.Template_HashTable_Public_Table % context
+            for pr, h in zip(self.HT2.prices, self.HT2.ladder.hashes):
+                table_string+=HashTableMDFormatter.Template_Hashes_TableRow % (
+                    self.HT2.gele, ("%%0.%df"%self.HT2.priceprec)%pr, h.hex()
+                )
         table_string += "\n" + HashTableMDFormatter.warningtext + "\n"
         return table_string
 
     def constructPreimageRevealTableText(self, obsprice):
-        context = self.getContext()
-        context.update({"obsprice": ("%%0.%df"%self.HT.priceprec)%obsprice,
-                        "generator": self.HT.getGenerator(obsprice)})
-        table_string = HashTableMDFormatter.Template_PreimageTable_Reveal % context
+        context = self.getContext(self.HT, obsprice)
+        table_string  = HashTableMDFormatter.Template_PreimageTable_Reveal_Intro % context
+        table_string += HashTableMDFormatter.Template_PreimageTable_Reveal_Table % context
         for pr, preimg in zip(self.HT.prices, self.HT.ladder.preimages):
             table_string+=HashTableMDFormatter.Template_Preimage_TableRow % (
                 self.HT.gele, ("%%0.%df"%self.HT.priceprec)%pr,
                 (preimg.hex().upper() if self.HT.checkConditionMet(pr, obsprice) else "(Condition not met)")
             )
+        if (self.HT2 is not None):
+            context = self.getContext(self.HT2, obsprice)
+            table_string += "\n" + HashTableMDFormatter.Template_PreimageTable_Reveal_Table % context
+            for pr, preimg in zip(self.HT2.prices, self.HT2.ladder.preimages):
+                table_string+=HashTableMDFormatter.Template_Preimage_TableRow % (
+                    self.HT2.gele, ("%%0.%df"%self.HT2.priceprec)%pr,
+                    (preimg.hex().upper() if self.HT2.checkConditionMet(pr, obsprice) else "(Condition not met)")
+                )
         table_string += "\n" + HashTableMDFormatter.warningtext + "\n"
         return table_string
 

@@ -6,16 +6,18 @@ secret = "SomeReallyGoodRandomSecretAphrobatJalamazooSeraphicLaryngopsZazzletoe"
 
 [BTC:USD Down]
 factor = 0.5
+bidirectional = true
 steps = 24
 decades = 5
 precision=2
 eventdesc = "Price of BTC as determined on target date. (European style)"
-reportmethod = "Reveal preimages for all hashes for which observed price meets or exceeds hash level."
+reportmethod = "Reveal preimages for all hashes for which observed price meets or exceeds hash level (descending table), and additionally for all hashes for which observed price is at or below hash level (ascending table)."
 determination = "Subjective estimation of 24-hr average of price, assessed at UTC 23:59:00 on target date, based on charts at coinmarketcap.com or similar source. (Method to be refined in future.)"
 timeframe = "Preimages to be published not later than 24 hours following determination at UTC 23:59:00 on the target date."
 
 [BTS:USD Down]
 factor = 0.5
+bidirectional = false
 steps = 24
 decades = 7
 precision=5
