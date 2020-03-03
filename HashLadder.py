@@ -254,12 +254,12 @@ class HashTableMDFormatter:
 
     Template_HashTable_Public_Intro = textwrap.dedent("""
     (Preamble text, if any.)\n
-    ## Hash Table(s): [%(pair)s] (Target:%(date_long)s):
-
-    These are tables of base16-encoded SHA-256 hashes upon which HTLC contracts may
-    be built. Pending conditions described below, some, none, or all of the 256-bit
-    (32-byte) base16-encoded preimages may be revealed at appointed times.
-
+    ## Hash Table: [%(pair)s] (Target: %(date_long)s)\n
+    """ +
+        "These are tables of base16-encoded SHA-256 hashes upon which HTLC contracts " +
+        "may be built. Pending conditions described below, some, none, or all of the " +
+        "256-bit (32-byte) base16-encoded preimages may be revealed at appointed times.\n" +
+    """
     **Target Date:**
      * %(date_verbose)s\n
     **Event to Report:**
@@ -274,7 +274,10 @@ class HashTableMDFormatter:
     """).strip("\n")+"\n\n"
 
     Template_HashTable_Public_Table = textwrap.dedent("""
+    <hr>
+
     ### %(sequenceword)s Table:\n
+    &nbsp;
     **Hash Header:** `%(header)s`\n
     **Simple Merkle Root:** `%(merkleroot)s`\n
     **Num Hashes:** %(numhashes)d (%(numdecades)d %(decadeword)s, %(steps)d steps each)\n
@@ -289,9 +292,11 @@ class HashTableMDFormatter:
     (Preamble text, if any.)
     NOTE: BE SURE TO FILL OUT BACK REFERENCE URL BELOW.
     (This should link back to original hash table.)\n
-    ## Preimage Reveal Table(s): [%(pair)s] (%(date_long)s):\n
-    These are tables of base16-encoded 256-bit (32 byte) preimages,
-    corresponding to a previously-published table(s) of _hashes_.\n
+    ## Preimage Reveal Table: [%(pair)s] (%(date_long)s)\n
+    """ +
+        "These are tables of base16-encoded 256-bit (32 byte) hash function preimages, " +
+        "corresponding to one or more previously published tables of SHA256 hash values.\n" +
+    """
     **Hash Table URL:**
      <PASTE URL HERE>\n
     **Target Date:**
@@ -309,7 +314,10 @@ class HashTableMDFormatter:
     """).strip("\n")+"\n\n"
 
     Template_PreimageTable_Reveal_Table = textwrap.dedent("""
+    <hr>
+
     ### %(sequenceword)s Table:\n
+    &nbsp;
     **Hash Header:** `%(header)s`\n
     **Simple Merkle Root:** `%(merkleroot)s`\n
     **Generator:** `%(generator)s`\n
@@ -333,7 +341,7 @@ class HashTableMDFormatter:
         context.update(HT.__dict__)
         context.update({
             "date_long": HT.date.strftime("%Y-%m-%d"),
-            "date_verbose": HT.date.strftime("%b %d %Y (%Y-%m-%d)"),
+            "date_verbose": HT.date.strftime("%B %d, %Y (%Y-%m-%d)"),
             "resskip1": HT.getResolutionPct(1),
             "resskip2": HT.getResolutionPct(2),
             "merkleroot": HT.merkleroot.hex(), # Replace/reformat as string
