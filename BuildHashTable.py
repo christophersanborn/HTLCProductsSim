@@ -1,23 +1,26 @@
 #
+# Hash Ladder Tool:
 #
+# Usage:    python3 %s <target_date> <top_price> <tag> [reveal_price]\n
+#           Pair and Tag-specific config option are read from the config file
+#           (ladder.conf) in section [<pair> <tag>].\n
+#
+# Example:  python3 %s "200110" "0.50 BTS:USD" Down\n
+#           Prints descending hash table (no preimages) for Jan 10, 2020 BTS:USD
+#           market, taking options from [BTS:USD Down] section.\n
+#
+# Example:  python3 %s "200110" "32000 BTC:USD" Down 7965.37\n
+#            Prints preimage table for BTC:USD observed price of 7965.37\n
+#
+
 import configparser
+import argparse
 import datetime
 import hashlib
 import sys
+import os.path
 from HTLCProductsSim import *
 from HashLadder import *
-
-
-AppDesc = """Hash Ladder Tool:\n
-  Usage:    python3 %s <target_date> <top_price> <tag> [reveal_price]\n
-            Pair and Tag-specific config option are read from the config file
-            (ladder.conf) in section [<pair> <tag>].\n
-  Example:  python3 %s "200110" "0.50 BTS:USD" Down\n
-            Prints descending hash table (no preimages) for Jan 10, 2020 BTS:USD
-            market, taking options from [BTS:USD Down] section.\n
-  Example:  python3 %s "200110" "32000 BTC:USD" Down 7965.37\n
-            Prints preimage table for BTC:USD observed price of 7965.37\n
-"""%(sys.argv[0], sys.argv[0], sys.argv[0])
 
 AppBanner = """(((
 ((( This is %s; A tool for building oracular hash
@@ -26,18 +29,27 @@ AppBanner = """(((
 
 cfgfile='ladder.conf'
 
+parser = argparse.ArgumentParser(
+    description="Hash Ladder Tool: Make [price, hash] tables and preimage tables.",
+    epilog="Pair and Tag-specific config option are read from the config file "
+           "(ladder.conf) in sections [<pair> <tag>].")
+parser.add_argument('targetdate', metavar="DATE", help="Target date in YYMMDD")
+parser.add_argument('topprice', metavar="PRICE", help="Extremum (top or bottom) price. Ex: \"32000 BTC:USD\"")
+parser.add_argument('tagstring', metavar="TAG", help="Table tag, e.g., \"Up\" or \"Down\"")
+parser.add_argument('observedprice', metavar="OBS_PRICE", nargs='?', help="Observed price (numeric, without currency pair)")
+parser.add_argument('--outfile', help="File to write table to (default stdout)")
+
 if __name__ == "__main__":
+
+    args = parser.parse_args()
 
     print(AppBanner)
 
-    if len(sys.argv) < 4:
-        print(AppDesc)
-        quit()
-
-    targetdate = sys.argv[1]    # e.g. "200110" for Jan 10, 2020
-    topprice = sys.argv[2]      # e.g. "32000 BTC:USD"
-    tagstring = sys.argv[3]     # e.g. "Down" for descending table
-    observedprice = float(sys.argv[4]) if len(sys.argv)>4 else None
+    targetdate = args.targetdate    # e.g. "200110" for Jan 10, 2020
+    topprice = args.topprice        # e.g. "32000 BTC:USD"
+    tagstring = args.tagstring      # e.g. "Down" for descending table
+    observedprice = float(args.observedprice) if args.observedprice else None
+    outfile = args.outfile
 
     topP = Price(topprice)
     cfgdefaults = {"bidirectional":"False"}
@@ -57,18 +69,30 @@ if __name__ == "__main__":
         HT2 = HashTable(targetdate, topP, secrettxt, cfg[section], flip=True)
     FT = HashTableMDFormatter(HT, HT2)
 
-    print ("((( An oracle SECRET was read from file '%s'.\n"%cfgfile)
-    HT.printFingerprint()
-    print("\n(((")
+    print ("((( An oracle SECRET was read from file '%s'.\n((("%cfgfile)
+    HT.printFingerprint(lineleader="((( ")
+    print("(((")
+
+    def check_outfile():
+        if outfile is not None:
+            print ("((( Table output to be written to: %s"%outfile)
+            if os.path.exists(outfile):
+                print("Output file exists. Will not overwrite. Exiting.")
+                quit()
+            print("(((")
 
     if observedprice:
         print("((( You have requested: PREIMAGE TABLE from section [%s]"%section)
         print("(((        target date: %s, observed price: %g.\n((("%(targetdate, observedprice))
-        FT.printPreimageRevealTable(observedprice)
+        check_outfile()
+        FT.printPreimageRevealTable(observedprice, outfile)
         print("(((\n((( This concludes: PREIMAGE TABLE from section [%s] target date: %s, observed price: %g.\n((("%(section, targetdate, observedprice))
     else:
         print("((( You have requested: HASH TABLE from section [%s] target date: %s.\n((("%(section, targetdate))
-        FT.printPublicHashTable()
+        check_outfile()
+        FT.printPublicHashTable(outfile)
         print("(((\n((( This concludes: HASH TABLE from section [%s] target date: %s.\n((("%(section, targetdate))
 
-    HT.printFingerprint()
+    if outfile is None:
+        HT.printFingerprint(lineleader="((( ")
+        print("(((")

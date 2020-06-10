@@ -168,11 +168,11 @@ class HashTable:
         root_text = "%s%s"%(self.header, secret)
         return hashlib.sha256(root_text.encode('utf-8')).digest()
 
-    def printFingerprint(self):
+    def printFingerprint(self, lineleader=""):
         fplen = len(self.fingerprint)
         fplen2 = int(fplen/2)
-        print("Fingerprint: [ %s ]" % self.fingerprint[0:fplen2])
-        print("             [ %s ]" % self.fingerprint[fplen2:fplen])
+        print(lineleader + "Fingerprint: [ %s ]" % self.fingerprint[0:fplen2])
+        print(lineleader + "             [ %s ]" % self.fingerprint[fplen2:fplen])
 
     def getSecretFingerprint(secret):
         finger_pre = "f:"+hashlib.sha256(secret.encode('utf-8')).digest().hex()+":fingerprint"
@@ -390,17 +390,29 @@ class HashTableMDFormatter:
         table_string += "\n" + HashTableMDFormatter.warningtext + "\n"
         return table_string
 
-    def printPublicHashTable(self):
-        table_string = self.constructPublicHashTableText()
+    def printTableToConsole(self, table_string):
         print("="*24+"BEGIN_COPY_PASTE_REGION"+"="*24+"\n")
         print(table_string)
         print("="*25+"END_COPY_PASTE_REGION"+"="*25)
 
-    def printPreimageRevealTable(self, obsprice):
+    def printTableToFile(self, table_string, outfile):
+        with open(outfile, 'w') as table_file:
+            table_file.write(table_string)
+        print("((( Wrote table to file: %s"%outfile)
+
+    def printPublicHashTable(self, outfile=None):
+        table_string = self.constructPublicHashTableText()
+        if not outfile:
+            self.printTableToConsole(table_string)
+        else:
+            self.printTableToFile(table_string, outfile)
+
+    def printPreimageRevealTable(self, obsprice, outfile=None):
         table_string = self.constructPreimageRevealTableText(obsprice)
-        print("="*24+"BEGIN_COPY_PASTE_REGION"+"="*24+"\n")
-        print(table_string)
-        print("="*25+"END_COPY_PASTE_REGION"+"="*25)
+        if not outfile:
+            self.printTableToConsole(table_string)
+        else:
+            self.printTableToFile(table_string, outfile)
 
 
 if __name__ == "__main__":
