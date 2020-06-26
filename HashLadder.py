@@ -11,7 +11,9 @@
 import configparser
 import datetime
 import hashlib
+import json
 import textwrap
+import PriceIterators
 from HTLCProductsSim import *
 from LadderElements import *
 
@@ -109,8 +111,8 @@ class HashTable:
     class ConfigError(Exception):
         pass
 
-    def __init__(self, targetdate, leadprice, secret, cfgsection,
-                 flip=False, hash_function=hashlib.sha256):
+    def __init__(self, targetdate, leadprice, secret, cfg,
+                 plane=1, flip=False, hash_function=hashlib.sha256):
 
         if isinstance(targetdate, str):
             targetdate = datetime.datetime.strptime(targetdate, "%y%m%d")
@@ -118,46 +120,40 @@ class HashTable:
         self.leadprice = leadprice.price  # Unless flip is true, see below
         self.pair = leadprice.pair
 
-        self.cfg = cfgsection   # A ConfigParser section.
-        self.decadefactor =  float(self.TryReadCfgOpt('factor'))
-        self.steps        =  int(self.TryReadCfgOpt('steps'))
-        self.numdecades   =  int(self.TryReadCfgOpt('decades'))
-        self.priceprec    =  int(self.TryReadCfgOpt('precision'))
-        self.eventdesc    =  self.TryReadCfgOpt('eventdesc')
-        self.reportmethod =  self.TryReadCfgOpt('reportmethod')
-        self.determination = self.TryReadCfgOpt('determination')
-        self.timeframe    =  self.TryReadCfgOpt('timeframe')
+        self.priceargs = cfg['priceargs']
+        self.priceargs['plane'] = plane
+        self.priceargs['flip'] = flip
 
-        self.tailprice = self.leadprice * self.decadefactor ** self.numdecades
-        if (flip):  # then swap lead and tail to flip direction of table
-            self.leadprice, self.tailprice = self.tailprice, self.leadprice
-            self.decadefactor = 1/self.decadefactor
+        self.PriceItr = PriceIterators.LogPrices(self.leadprice, **self.priceargs)
+        self.prices = self.PriceItr.prices
 
-        self.ascending    =  (self.decadefactor > 1)
-        self.descending   =  (self.decadefactor < 1)
-        self.normfactor   =  self.decadefactor if self.ascending else (1/self.decadefactor)
-        self.decadeword   =  "octaves" if self.normfactor==2 else "decades" if self.normfactor==10 else "multiples"
-        self.gele         =  ">=" if self.descending else "<="
+        self.predicates = cfg['predicates']
+        self.predicate = self.predicates[0 if not flip else 1]
+
+        self.priceprec    =  cfg['precision']
+        self.eventdesc    =  cfg['eventdesc']
+        self.reportmethod =  cfg['reportmethod']
+        self.determination = cfg['determination']
+        self.timeframe    =  cfg['timeframe']
+
         self.header       =  self.ConstructPretextHeader()
-        self.numhashes    =  self.steps * self.numdecades + 1
+        self.numhashes    =  len(self.prices)
         self.roothash     =  self.getRootHash(secret)
         self.fingerprint  =  HashTable.getSecretFingerprint(secret)
 
         self.ladder     = HashLadder(self.header, self.roothash, self.numhashes, hash_function)
         self.merkleroot = self.ladder.getMerkleRoot()
-        self.prices     = self.getPrices()
 
 
     def ConstructPretextHeader(self):
         # Header Format:
-        #  YYMMDD:[gele]:BASE:QUOTE:startprice:FACTOR:STEPS
-        return "%s:%s:%s:%s:%s:%s" % (
+        #  YYMMDD:predicate:BASE:QUOTE:[PRICEHEADER...]
+        return "%s:%s:%s:%s" % (
             "d%s"%self.date.strftime("%y%m%d"),
-            self.gele,
+            self.predicate,
             "%s"%str(self.pair),
-            "%s%g"%("t" if self.descending else "b", self.leadprice),
-            "f%g"%(self.normfactor),
-            "s%g"%self.steps )
+            "%s"%self.PriceItr
+        )
 
     def getRootHash(self, secret):
         # Returns a deterministic root hash for a priceladder by
@@ -167,6 +163,12 @@ class HashTable:
             # TODO: be flexible and accept bytes
         root_text = "%s%s"%(self.header, secret)
         return hashlib.sha256(root_text.encode('utf-8')).digest()
+
+    def getDescriptiveContext(self):    # Metadata, basically
+        context = {}
+        context.update(self.__dict__)   # TODO: be more selective about included keys
+        context.update(self.PriceItr.getDescriptiveContext())
+        return context
 
     def printFingerprint(self, lineleader=""):
         fplen = len(self.fingerprint)
@@ -182,59 +184,22 @@ class HashTable:
         charlist = "_/|\-~..,oO:;+LTU^abspg*#378%?''"
         return ''.join(charlist[i] for i in tmpB)
 
-    def getPrices(self, startidx=0):
-        # Returns prices array for some number of decades from the originPrice
-        prices = [self.leadprice]
-        decadeSteps = HashTable.getDecadeSteps(self.decadefactor, self.steps)
-        for i in range(self.numdecades):
-            extend = [prices[-1] * ds for ds in decadeSteps]
-            prices.extend(extend)
-        return prices[startidx:]
-
-    def getDecadeSteps(factor=10, steps=10):
-        # Generate sequnce of product multiplier that span a "decade" of
-        # proportionality given by 'factor' over a series of 'steps'
-        # intervals.
-        factor = float(factor)
-        stepmult = factor ** (1 / steps)
-        steppct = (stepmult-1)*100 if stepmult>1 else ((1/stepmult)-1)*100
-        result = [ stepmult ** i for i in range(1,1+steps)]
-        residual = abs(result[-1]-factor) # measure of accumulated error
-        if residual > 1e-12:
-            print ("Warning: Decade Residual of %g may be too large." % residual)
-        result[-1] = float(factor) # prevent accumulated error of many decades
-        return result
+    def checkPredicate(self, l, r):
+        if self.predicate == ">=":
+            compare = lambda l,r: l >= r
+        elif self.predicate == "<=":
+            compare = lambda l,r: l <= r
+        else:
+            raise Exception("Don't know how to apply predicate '%s'."%self.predicate)
+        return compare(l,r)
 
     def checkConditionMet(self, price, obsprice):
-        if self.descending:
-            return True if (obsprice >= price) else False
-        elif self.ascending:
-            return True if (obsprice <= price) else False
-        else:
-            raise Exception("Condition eval: table neither ascending nor descending.")
+        return True if self.checkPredicate(obsprice, price) else False
 
     def getGenerator(self, obsprice):
-        if self.descending:
-            for i in range(len(self.prices)):
-                if (obsprice >= self.prices[i]):
-                    return self.ladder.pretexts[i]
-        elif self.ascending:
-            for i in range(len(self.prices)):
-                if (obsprice <= self.prices[i]):
-                    return self.ladder.pretexts[i]
-        else:
-            raise Exception("Don't know how to select generator for table neither ascending nor descending.")
-
-    def getResolutionPct(self, skip=1):
-        stepfact = self.normfactor ** (1/self.steps)
-        return ((stepfact ** skip) - 1) * 100
-
-    def TryReadCfgOpt(self, key):
-        try:
-            return self.cfg[key].strip('"')
-        except KeyError as e:
-            msg = "Missing key '%s' in section [%s]."%(key,self.cfg.name)
-            raise HashTable.ConfigError(msg) from None
+        for i in range(len(self.prices)):
+            if self.checkPredicate(obsprice, self.prices[i]):
+                return self.ladder.pretexts[i]
 
     def diag_print_contents(self):
         # Intended for diagnostics
@@ -242,6 +207,31 @@ class HashTable:
             print("%g %s %s %s"%(pc, t,p.hex(),h.hex()))
         merk = SimpleMerkleRoot(self.ladder.hashes, self.ladder.hash_function)
         print("Merkle Root: %s" % merk.hex())
+
+
+class ConfigArgsExtractor:
+    # Convert configparser sections to dicts
+    def __init__(self, configparsersection):
+        self.section = configparsersection
+
+    def getHashTableArgs(self):
+        cfg = self.section
+        args = {}
+        args['priceargs'] = json.loads(cfg.get('priceargs', fallback="{}").strip('"'))
+        args['predicates'] = json.loads(cfg.get('predicates', fallback="[]").strip('"'))
+        args['precision'] = int(cfg.get('precision', fallback="8").strip('"'))
+        for key in ["eventdesc", "reportmethod", "determination", "timeframe"]:
+            args[key] = cfg.get(key, fallback="N/A").strip('"')
+        return args
+
+    def getMultiTableArgs(self):
+        cfg = self.section
+        args = {}
+        args['bidirectional'] = cfg.getboolean('bidirectional', fallback=False)
+        planes = json.loads(cfg.get('planes', fallback="[1]").strip('"'))
+        planes = planes if isinstance(planes, list) else [planes]
+        args['planes'] = planes
+        return args
 
 
 class HashTableMDFormatter:
@@ -280,7 +270,7 @@ class HashTableMDFormatter:
     &nbsp;
     **Hash Header:** `%(header)s`\n
     **Simple Merkle Root:** `%(merkleroot)s`\n
-    **Num Hashes:** %(numhashes)d (%(numdecades)d %(decadeword)s, %(steps)d steps each)\n
+    **Num Hashes:** %(numhashes)d (%(structure)s)\n
     **Resolution:** %(resskip1)0.2f%% each hash, or %(resskip2)0.2f%% every two hashes,...\n
     """+warningtext+"""\n
     Begin Table:\n
@@ -330,22 +320,25 @@ class HashTableMDFormatter:
     Template_Hashes_TableRow = "%s | %s | %s\n"
     Template_Preimage_TableRow = "%s | %s | %s\n"
 
-    def __init__(self, HTobj, HTobj_alt=None):
-        self.HT = HTobj
-        self.HT2 = HTobj_alt  # Usually a bottom-up pair to a top-down chart.
+    def __init__(self, HTObjOrList, HTobj_alt=None):
+        self.HT = HTObjOrList if isinstance(HTObjOrList, list) else [HTObjOrList]
+        if HTobj_alt is not None:
+            self.HT.append(HTobj_alt) # Often a bottom-up pair to a top-down chart.
 
     def getContext(self, HT, obsprice=None):
         # Get dictionary of template variables, starting with the HashTable
         # dictionary and supplementing with some additional values:
-        context = {}
-        context.update(HT.__dict__)
+        def ResolutionPct(p1, p2):
+            ratio = p2/p1 if p2>p1 else p1/p2
+            return (ratio-1) * 100
+        context = HT.getDescriptiveContext()
         context.update({
             "date_long": HT.date.strftime("%Y-%m-%d"),
             "date_verbose": HT.date.strftime("%B %d, %Y (%Y-%m-%d)"),
-            "resskip1": HT.getResolutionPct(1),
-            "resskip2": HT.getResolutionPct(2),
+            "resskip1": ResolutionPct(HT.prices[0], HT.prices[1]),
+            "resskip2": ResolutionPct(HT.prices[0], HT.prices[2]),
             "merkleroot": HT.merkleroot.hex(), # Replace/reformat as string
-            "sequenceword": "Ascending" if HT.ascending else "Descending" if HT.descending else "Unsequenced"
+            "sequenceword": "Ascending" if HT.predicate[0]=="<" else "Descending" if HT.predicate[0]==">" else "Unsequenced"
         })
         if (obsprice is not None):
             context.update({"obsprice": ("%%0.%df"%HT.priceprec)%obsprice,
@@ -353,41 +346,32 @@ class HashTableMDFormatter:
         return context
 
     def constructPublicHashTableText(self):
-        context = self.getContext(self.HT)
+        context = self.getContext(self.HT[0])
         table_string  = HashTableMDFormatter.Template_HashTable_Public_Intro % context
-        table_string += HashTableMDFormatter.Template_HashTable_Public_Table % context
-        for pr, h in zip(self.HT.prices, self.HT.ladder.hashes):
-            table_string+=HashTableMDFormatter.Template_Hashes_TableRow % (
-                self.HT.gele, ("%%0.%df"%self.HT.priceprec)%pr, h.hex()
-            )
-        if (self.HT2 is not None):
-            context = self.getContext(self.HT2)
-            table_string += "\n" + HashTableMDFormatter.Template_HashTable_Public_Table % context
-            for pr, h in zip(self.HT2.prices, self.HT2.ladder.hashes):
+        for i in range(len(self.HT)):
+            context = self.getContext(self.HT[i])
+            table_string += HashTableMDFormatter.Template_HashTable_Public_Table % context
+            for pr, h in zip(self.HT[i].prices, self.HT[i].ladder.hashes):
                 table_string+=HashTableMDFormatter.Template_Hashes_TableRow % (
-                    self.HT2.gele, ("%%0.%df"%self.HT2.priceprec)%pr, h.hex()
+                    self.HT[i].predicate, ("%%0.%df"%self.HT[i].priceprec)%pr, h.hex()
                 )
-        table_string += "\n" + HashTableMDFormatter.warningtext + "\n"
+            table_string += "\n"
+        table_string += HashTableMDFormatter.warningtext + "\n"
         return table_string
 
     def constructPreimageRevealTableText(self, obsprice):
-        context = self.getContext(self.HT, obsprice)
+        context = self.getContext(self.HT[0], obsprice)
         table_string  = HashTableMDFormatter.Template_PreimageTable_Reveal_Intro % context
-        table_string += HashTableMDFormatter.Template_PreimageTable_Reveal_Table % context
-        for pr, preimg in zip(self.HT.prices, self.HT.ladder.preimages):
-            table_string+=HashTableMDFormatter.Template_Preimage_TableRow % (
-                self.HT.gele, ("%%0.%df"%self.HT.priceprec)%pr,
-                (preimg.hex().upper() if self.HT.checkConditionMet(pr, obsprice) else "(Condition not met)")
-            )
-        if (self.HT2 is not None):
-            context = self.getContext(self.HT2, obsprice)
-            table_string += "\n" + HashTableMDFormatter.Template_PreimageTable_Reveal_Table % context
-            for pr, preimg in zip(self.HT2.prices, self.HT2.ladder.preimages):
+        for i in range(len(self.HT)):
+            context = self.getContext(self.HT[i], obsprice)
+            table_string += HashTableMDFormatter.Template_PreimageTable_Reveal_Table % context
+            for pr, preimg in zip(self.HT[i].prices, self.HT[i].ladder.preimages):
                 table_string+=HashTableMDFormatter.Template_Preimage_TableRow % (
-                    self.HT2.gele, ("%%0.%df"%self.HT2.priceprec)%pr,
-                    (preimg.hex().upper() if self.HT2.checkConditionMet(pr, obsprice) else "(Condition not met)")
+                    self.HT[i].predicate, ("%%0.%df"%self.HT[i].priceprec)%pr,
+                    (preimg.hex().upper() if self.HT[i].checkConditionMet(pr, obsprice) else "(Condition not met)")
                 )
-        table_string += "\n" + HashTableMDFormatter.warningtext + "\n"
+            table_string += "\n"
+        table_string += HashTableMDFormatter.warningtext + "\n"
         return table_string
 
     def printTableToConsole(self, table_string):
@@ -428,12 +412,14 @@ if __name__ == "__main__":
                 return self.hash[0:3]
         return AwfulHash(msgbytes)
 
-    topP = Price("32000 BTC:USD")
+    topP = Price("32000 CJS:EUR")
     section = str(topP.pair)+" "+"Down"
     cfg = configparser.ConfigParser()
     cfg.read('ladder.conf')
+    htcfg = ConfigArgsExtractor(cfg[section]).getHashTableArgs()
+    mtcfg = ConfigArgsExtractor(cfg[section]).getMultiTableArgs()
 
-    HT = HashTable("200223", topP, "SuperSecret", cfg[section], hash_function=hashbad)
+    HT = HashTable("200223", topP, "SuperSecret", htcfg, hash_function=hashbad)
 
     FT = HashTableMDFormatter(HT)
     FT.printPreimageRevealTable(9010)

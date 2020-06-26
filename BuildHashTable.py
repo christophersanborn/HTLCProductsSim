@@ -63,14 +63,19 @@ if __name__ == "__main__":
         print ("Could not read hash secret from config file '%s'."%cfgfile)
         quit()
 
-    HT = HashTable(targetdate, topP, secrettxt, cfg[section])
-    HT2 = None
-    if (cfg.getboolean(section,'bidirectional')):
-        HT2 = HashTable(targetdate, topP, secrettxt, cfg[section], flip=True)
-    FT = HashTableMDFormatter(HT, HT2)
+    htcfg = ConfigArgsExtractor(cfg[section]).getHashTableArgs()
+    mtcfg = ConfigArgsExtractor(cfg[section]).getMultiTableArgs()
+
+    HT_list = []
+    for flip in [False, True] if mtcfg['bidirectional'] else [False]:
+        for plane in mtcfg['planes']:
+            HT_list.append(HashTable(targetdate, topP, secrettxt,
+                                     htcfg, plane=plane, flip=flip))
+
+    FT = HashTableMDFormatter(HT_list)
 
     print ("((( An oracle SECRET was read from file '%s'.\n((("%cfgfile)
-    HT.printFingerprint(lineleader="((( ")
+    HT_list[0].printFingerprint(lineleader="((( ")
     print("(((")
 
     def check_outfile():
@@ -94,5 +99,5 @@ if __name__ == "__main__":
         print("(((\n((( This concludes: HASH TABLE from section [%s] target date: %s.\n((("%(section, targetdate))
 
     if outfile is None:
-        HT.printFingerprint(lineleader="((( ")
+        HT_list[0].printFingerprint(lineleader="((( ")
         print("(((")
