@@ -19,6 +19,7 @@ import datetime
 import hashlib
 import sys
 import os.path
+import PriceIterators
 from HTLCProductsSim import *
 from HashLadder import *
 
@@ -69,8 +70,14 @@ if __name__ == "__main__":
     HT_list = []
     for flip in [False, True] if mtcfg['bidirectional'] else [False]:
         for plane in mtcfg['planes']:
-            HT_list.append(HashTable(targetdate, topP, secrettxt,
-                                     htcfg, plane=plane, flip=flip))
+            PriceIter = PriceIterators.New(
+                startprice=topP.price, **htcfg['priceargs'],
+                plane=plane, flip=flip
+            )
+            HT_list.append(
+                HashTable(targetdate, topP.pair, PriceIter,
+                          secrettxt, htcfg, plane=plane, flip=flip)
+            )
 
     FT = HashTableMDFormatter(HT_list)
 

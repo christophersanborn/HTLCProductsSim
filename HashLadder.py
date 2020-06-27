@@ -13,7 +13,6 @@ import datetime
 import hashlib
 import json
 import textwrap
-import PriceIterators
 from HTLCProductsSim import *
 from LadderElements import *
 
@@ -111,20 +110,15 @@ class HashTable:
     class ConfigError(Exception):
         pass
 
-    def __init__(self, targetdate, leadprice, secret, cfg,
+    def __init__(self, targetdate, pricepair, priceiter, secret, cfg,
                  plane=1, flip=False, hash_function=hashlib.sha256):
 
         if isinstance(targetdate, str):
             targetdate = datetime.datetime.strptime(targetdate, "%y%m%d")
         self.date = targetdate
-        self.leadprice = leadprice.price  # Unless flip is true, see below
-        self.pair = leadprice.pair
+        self.pair = pricepair
 
-        self.priceargs = cfg['priceargs']
-        self.priceargs['plane'] = plane
-        self.priceargs['flip'] = flip
-
-        self.PriceItr = PriceIterators.LogPrices(self.leadprice, **self.priceargs)
+        self.PriceItr = priceiter
         self.prices = self.PriceItr.prices
 
         self.predicates = cfg['predicates']
@@ -401,6 +395,8 @@ class HashTableMDFormatter:
 
 if __name__ == "__main__":
 
+    import PriceIterators
+
     print("Testing...")
 
     def hashbad(msgbytes):
@@ -419,7 +415,9 @@ if __name__ == "__main__":
     htcfg = ConfigArgsExtractor(cfg[section]).getHashTableArgs()
     mtcfg = ConfigArgsExtractor(cfg[section]).getMultiTableArgs()
 
-    HT = HashTable("200223", topP, "SuperSecret", htcfg, hash_function=hashbad)
+    PriceIter = PriceIterators.New(**htcfg['priceargs'], startprice=topP.price)
+
+    HT = HashTable("200223", topP.pair, PriceIter, "SuperSecret", htcfg, hash_function=hashbad)
 
     FT = HashTableMDFormatter(HT)
     FT.printPreimageRevealTable(9010)

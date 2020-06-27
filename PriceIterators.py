@@ -4,72 +4,28 @@
 # indexable sequences.  E.g. logarithmically-spaced intervals where
 # the index represetnts a logarithm of the price.
 #
+# Useage:
+#
+#  import PriceIterators
+#
+#  prices = PriceIterators.New(**args)
+#
 # Classes:
 #
-#  o LogSpacer
+#  o _LogSpacer
+#  o LogPrices
 #
+# Module Utils:
+#
+#  o New(args...)
 #
 import math
 import itertools
 
-####
-## Class:  LogSpacer
-##
-## Generates sequences of factors where each factor is a constant
-## ratio to the preceding one.  Note we aren't dealing with "prices"
-## here, just factors, so one end of the sequence will always be 1.00.
-##
-## Can generate the sequence either "forward" or "reverse".
-##
-## Handles "staggering", where multiple course-grained sequences, when
-## combined together, make a fine-grained sequence.
-##
-class LogSpacer:
+def New(**kwargs):
+    newPI = LogPrices(**kwargs) # TODO: support other types
+    return newPI
 
-    def __init__(self, decadefactor=None, steps=None, stagger=None):
-        self.decadefactor = decadefactor
-        self.steps = steps
-        self.stagger = stagger
-
-    def getLevels(self, numDecades):
-        self._levels = [1.0]
-        decadeSteps = self.getDecadeSteps()
-        stepFactor = decadeSteps[0]
-        (n, d) = LogSpacer.staggerRatioPair(self.stagger)
-        staggerFactor = stepFactor ** (n/d)
-        self._levels = [1.0 * staggerFactor]
-        for i in range(numDecades):
-            extend = [self._levels[-1] * ds for ds in decadeSteps]
-            self._levels.extend(extend)
-        return self._levels
-
-    def getDecadeSteps(self):
-        # Generate sequence of product multiplier that span a "decade" of
-        # proportionality given by 'factor' over a series of 'steps'
-        # intervals.
-        factor = float(self.decadefactor)
-        steps = int(self.steps)
-        stepmult = factor ** (1 / steps)
-        steppct = (stepmult-1)*100 if stepmult>1 else ((1/stepmult)-1)*100
-        result = [ stepmult ** i for i in range(1,1+steps)]
-        residual = abs(result[-1]-factor) # measure of accumulated error
-        if residual > 1e-12:
-            print ("Warning: Decade Residual of %g may be too large." % residual)
-        result[-1] = float(factor) # prevent accumulated error of many decades
-        return result
-
-    def staggerRatioPair(idx):
-        """ Compute power ratio used to compute the idx'th stagger of a series.
-
-        Returns (n, d) such that a price point in a series spaced with
-        stepfactor F is staggered by P(n, idx) = P(n, 0) * pow(F,(n/d)).
-        """
-        if idx==0: return (0, 1)
-        msbidx = 2**int(math.log(idx,2))    # keeps only MSB of idx
-        d = msbidx*2
-        (n0, d0) = LogSpacer.staggerRatioPair(idx-msbidx)
-        n = 1 + n0*d/d0
-        return (n, d)
 
 class LogPrices:
     """Logarithmically indexed price sequence.
@@ -133,7 +89,7 @@ class LogPrices:
     def getPrices(self):
         stagger_m = 2**int(math.log(self.plane,2))
         stagger_n = self.plane - stagger_m # strip leading bit
-        multiples = LogSpacer(self.factor, self.steps, stagger_n).getLevels(self.decades)
+        multiples = _LogSpacer(self.factor, self.steps, stagger_n).getLevels(self.decades)
         prices = [self.startprice * m for m in multiples]
         if self.flip:
             prices.reverse()
@@ -144,12 +100,72 @@ class LogPrices:
         return self.getPrices()
 
 
+####
+## Class:  _LogSpacer
+##
+## Generates sequences of factors where each factor is a constant
+## ratio to the preceding one.  Note we aren't dealing with "prices"
+## here, just factors, so one end of the sequence will always be 1.00.
+##
+## Can generate the sequence either "forward" or "reverse".
+##
+## Handles "staggering", where multiple course-grained sequences, when
+## combined together, make a fine-grained sequence.
+##
+class _LogSpacer:
+
+    def __init__(self, decadefactor=None, steps=None, stagger=None):
+        self.decadefactor = decadefactor
+        self.steps = steps
+        self.stagger = stagger
+
+    def getLevels(self, numDecades):
+        self._levels = [1.0]
+        decadeSteps = self.getDecadeSteps()
+        stepFactor = decadeSteps[0]
+        (n, d) = _LogSpacer.staggerRatioPair(self.stagger)
+        staggerFactor = stepFactor ** (n/d)
+        self._levels = [1.0 * staggerFactor]
+        for i in range(numDecades):
+            extend = [self._levels[-1] * ds for ds in decadeSteps]
+            self._levels.extend(extend)
+        return self._levels
+
+    def getDecadeSteps(self):
+        # Generate sequence of product multiplier that span a "decade" of
+        # proportionality given by 'factor' over a series of 'steps'
+        # intervals.
+        factor = float(self.decadefactor)
+        steps = int(self.steps)
+        stepmult = factor ** (1 / steps)
+        steppct = (stepmult-1)*100 if stepmult>1 else ((1/stepmult)-1)*100
+        result = [ stepmult ** i for i in range(1,1+steps)]
+        residual = abs(result[-1]-factor) # measure of accumulated error
+        if residual > 1e-12:
+            print ("Warning: Decade Residual of %g may be too large." % residual)
+        result[-1] = float(factor) # prevent accumulated error of many decades
+        return result
+
+    def staggerRatioPair(idx):
+        """ Compute power ratio used to compute the idx'th stagger of a series.
+
+        Returns (n, d) such that a price point in a series spaced with
+        stepfactor F is staggered by P(n, idx) = P(n, 0) * pow(F,(n/d)).
+        """
+        if idx==0: return (0, 1)
+        msbidx = 2**int(math.log(idx,2))    # keeps only MSB of idx
+        d = msbidx*2
+        (n0, d0) = _LogSpacer.staggerRatioPair(idx-msbidx)
+        n = 1 + n0*d/d0
+        return (n, d)
+
+
 if __name__ == '__main__':
     print("Test 1:")
 
     lines = ["", "", ""]
     for i in range(0,33):
-        (n,d) = LogSpacer.staggerRatioPair(i)
+        (n,d) = _LogSpacer.staggerRatioPair(i)
         lines[0] += "%3d  "%n
         lines[1] += " --  "
         lines[2] += "%3d  "%d
@@ -160,7 +176,7 @@ if __name__ == '__main__':
 
     print("\nTest 2:")
 
-    LS = LogSpacer(64, 3, 2)
+    LS = _LogSpacer(64, 3, 2)
     for i in LS.getLevels(2):
         print(i)
 
