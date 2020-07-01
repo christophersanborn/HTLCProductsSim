@@ -211,7 +211,7 @@ class ConfigArgsExtractor:
     def getHashTableArgs(self):
         cfg = self.section
         args = {}
-        args['priceargs'] = json.loads(cfg.get('priceargs', fallback="{}").strip('"'))
+        args['priceargs'] = json.loads(cfg.get('prices', fallback="{}").strip('"'))
         args['predicates'] = json.loads(cfg.get('predicates', fallback="[]").strip('"'))
         args['precision'] = int(cfg.get('precision', fallback="8").strip('"'))
         for key in ["eventdesc", "reportmethod", "determination", "timeframe"]:

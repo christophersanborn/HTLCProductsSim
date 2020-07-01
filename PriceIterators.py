@@ -23,8 +23,54 @@ import math
 import itertools
 
 def New(**kwargs):
-    newPI = LogPrices(**kwargs) # TODO: support other types
+    algorithm = kwargs.pop("iterator", "default")
+    if algorithm in ["logarithmic", "default"]:
+        newPI = LogPrices(**kwargs)
+    elif algorithm in ["interval"]:
+        newPI = IntervalPrices(**kwargs)
     return newPI
+
+
+class IntervalPrices:
+    """Prices at fixed intervals."""
+
+    def __init__(self, startprice, interval, steps, plane=1, flip=False):
+        self.startprice = startprice
+        self.interval = interval
+        self.steps = steps
+        self.plane = plane # ignored
+        self.flip = flip
+
+    def __str__(self):
+        # String for appending to pretext header, e.g. "t32000:f2:s24:p2d"
+        # Format: (t|b)<startprice>:v<INTERVAL>:s<STEPS>[:p<PLANE>(u|d)]
+        descending = (self.interval < 0) ^ self.flip
+        tailprice = self.startprice + (self.interval * self.steps)
+        headerprice = self.startprice if not self.flip else tailprice
+        norminterval = self.interval if (self.interval > 0) else -self.interval
+        return "%s:%s:%s" % (
+            "%s%g"%("t" if descending else "b", headerprice),
+            "v%g"%(norminterval),
+            "s%g"%(self.steps)
+        )
+
+    def getDescriptiveContext(self):
+        context = {}
+        context['steps'] = self.steps
+        context['plane'] = self.plane
+        context['structure'] = "fixed intervals"
+        return context
+
+    def getPrices(self):
+        deltas = [self.interval * m for m in range(self.steps+1)]
+        prices = [self.startprice + d for d in deltas]
+        if self.flip:
+            prices.reverse()
+        return prices
+
+    @property
+    def prices(self):
+        return self.getPrices()
 
 
 class LogPrices:
