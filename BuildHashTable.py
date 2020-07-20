@@ -22,6 +22,7 @@ import os.path
 import PriceIterators
 from HTLCProductsSim import *
 from HashLadder import *
+import TableFormatters
 
 AppBanner = """(((
 ((( This is %s; A tool for building oracular hash
@@ -79,7 +80,7 @@ if __name__ == "__main__":
                           secrettxt, htcfg, plane=plane, flip=flip)
             )
 
-    FT = HashTableMDFormatter(HT_list)
+    FT = TableFormatters.GetFMT(htcfg['formatter'], HT_list)
 
     print ("((( An oracle SECRET was read from file '%s'.\n((("%cfgfile)
     HT_list[0].printFingerprint(lineleader="((( ")
