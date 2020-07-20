@@ -98,10 +98,9 @@ class Formatter:
     Template_Hashes_TableRow = "%s | %s | %s\n"
     Template_Preimage_TableRow = "%s | %s | %s\n"
 
-    def __init__(self, HTObjOrList, HTobj_alt=None):
+    def __init__(self, HTObjOrList, **kwargs):
         self.HT = HTObjOrList if isinstance(HTObjOrList, list) else [HTObjOrList]
-        if HTobj_alt is not None:
-            self.HT.append(HTobj_alt) # Often a bottom-up pair to a top-down chart.
+        self.additional_context = kwargs
 
     def getContext(self, HT, obsprice=None):
         # Get dictionary of template variables, starting with the HashTable
@@ -110,6 +109,7 @@ class Formatter:
             ratio = p2/p1 if p2>p1 else p1/p2
             return (ratio-1) * 100
         context = HT.getDescriptiveContext()
+        context.update(self.additional_context)
         context.update({
             "date_long": HT.date.strftime("%Y-%m-%d"),
             "date_verbose": HT.date.strftime("%B %d, %Y (%Y-%m-%d)"),

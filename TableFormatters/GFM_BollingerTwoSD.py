@@ -33,7 +33,7 @@ class Formatter:
      * %(eventdesc)s\n
     **Price Points:**\n
     Five price levels are picked around a central median, illustrated here:\n
-    IMGLINK\n
+    %(imglink)s\n
     **Reporting Method:**
      * %(reportmethod)s\n
     **Determination Method:**
@@ -74,7 +74,7 @@ class Formatter:
      * %(eventdesc)s\n
     **Price Points:**\n
     Five price levels were picked around a central median, as illustrated here:\n
-    IMGLINK\n
+    %(imglink)s\n
     **Reporting Method:**
      * %(reportmethod)s\n
     **Determination Method:**
@@ -102,25 +102,23 @@ class Formatter:
     Template_Hashes_TableRow = "%s | %s | %s\n"
     Template_Preimage_TableRow = "%s | %s | %s\n"
 
-    def __init__(self, HTObjOrList, HTobj_alt=None):
+    def __init__(self, HTObjOrList, **kwargs):
         self.HT = HTObjOrList if isinstance(HTObjOrList, list) else [HTObjOrList]
-        if HTobj_alt is not None:
-            self.HT.append(HTobj_alt) # Often a bottom-up pair to a top-down chart.
+        self.additional_context = kwargs
 
     def getContext(self, HT, obsprice=None):
         # Get dictionary of template variables, starting with the HashTable
         # dictionary and supplementing with some additional values:
-        def ResolutionPct(p1, p2):
-            ratio = p2/p1 if p2>p1 else p1/p2
-            return (ratio-1) * 100
+        def WrapImageLink(imglink):
+            return "!["+imglink.split("/")[-1]+"]("+imglink+")"
         context = HT.getDescriptiveContext()
+        context.update(self.additional_context)
         context.update({
             "date_long": HT.date.strftime("%Y-%m-%d"),
             "date_verbose": HT.date.strftime("%B %d, %Y (%Y-%m-%d)"),
-            "resskip1": ResolutionPct(HT.prices[0], HT.prices[1]),
-            "resskip2": ResolutionPct(HT.prices[0], HT.prices[2]),
             "merkleroot": HT.merkleroot.hex(), # Replace/reformat as string
-            "sequenceword": "Ascending" if HT.predicate[0]=="<" else "Descending" if HT.predicate[0]==">" else "Unsequenced"
+            "sequenceword": "Ascending" if HT.predicate[0]=="<" else "Descending" if HT.predicate[0]==">" else "Unsequenced",
+            "imglink": WrapImageLink(context['imglink'])
         })
         if (obsprice is not None):
             context.update({"obsprice": ("%%0.%df"%HT.priceprec)%obsprice,

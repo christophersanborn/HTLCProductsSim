@@ -40,6 +40,8 @@ parser.add_argument('topprice', metavar="PRICE", help="Extremum (top or bottom) 
 parser.add_argument('tagstring', metavar="TAG", help="Table tag, e.g., \"Up\" or \"Down\"")
 parser.add_argument('observedprice', metavar="OBS_PRICE", nargs='?', help="Observed price (numeric, without currency pair)")
 parser.add_argument('--outfile', help="File to write table to (default stdout)")
+parser.add_argument('--priceargs', help="Additional args to price iterator (json)", default='{}')
+parser.add_argument('--formatargs', help="Additional args to formatter plugin (json)", default='{}')
 
 if __name__ == "__main__":
 
@@ -52,6 +54,8 @@ if __name__ == "__main__":
     tagstring = args.tagstring      # e.g. "Down" for descending table
     observedprice = float(args.observedprice) if args.observedprice else None
     outfile = args.outfile
+    add_price = json.loads(args.priceargs)
+    add_format = json.loads(args.formatargs)
 
     topP = Price(topprice)
     cfgdefaults = {"bidirectional":"False"}
@@ -68,6 +72,8 @@ if __name__ == "__main__":
     htcfg = ConfigArgsExtractor(cfg[section]).getHashTableArgs()
     mtcfg = ConfigArgsExtractor(cfg[section]).getMultiTableArgs()
 
+    htcfg['priceargs'].update(add_price)
+
     HT_list = []
     for flip in [False, True] if mtcfg['bidirectional'] else [False]:
         for plane in mtcfg['planes']:
@@ -80,7 +86,7 @@ if __name__ == "__main__":
                           secrettxt, htcfg, plane=plane, flip=flip)
             )
 
-    FT = TableFormatters.GetFMT(htcfg['formatter'], HT_list)
+    FT = TableFormatters.GetFMT(htcfg['formatter'], HT_list, **add_format)
 
     print ("((( An oracle SECRET was read from file '%s'.\n((("%cfgfile)
     HT_list[0].printFingerprint(lineleader="((( ")
