@@ -11,6 +11,7 @@
 
 from . import GFM_LogStep
 from . import GFM_BollingerTwoSD
+from . import GFM_PlainOldList
 from . import common as _common
 
 def GetFMT(fmtid, *args, **kwargs):

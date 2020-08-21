@@ -28,7 +28,61 @@ def New(**kwargs):
         newPI = LogPrices(**kwargs)
     elif algorithm in ["interval"]:
         newPI = IntervalPrices(**kwargs)
+    elif algorithm in ["plainoldlist"]:
+        newPI = PlainOldListPrices(**kwargs)
     return newPI
+
+
+class PlainOldListPrices:
+    """Prices from a plain old list.
+
+    Note that :startprice: is ignored here.  (It is used in the layers above
+    though just to get currency pair, where it is sufficient to pass in any
+    value, typically "0 BASE:QUOTE")
+
+    :param pricelist: List of prices, eg [12.345,67.890,...]. Note: List is
+    assumed to be ordered.  Whether list is "ascending" or "descending" is
+    ascertained by looking at the first two elements.  Lists of length 1 ARE
+    permitted.
+
+    """
+
+    def __init__(self, startprice, pricelist, plane=1, flip=False):
+        self.startprice = pricelist[0]
+        self.pricelist = pricelist
+        self.interval = pricelist[1] - pricelist[0] if len(pricelist) > 1 else 0
+        self.steps = len(pricelist)
+        self.plane = plane # ignored
+        self.flip = flip
+
+    def __str__(self):
+        # String for appending to pretext header, e.g. "t32000:f2:s24:p2d"
+        # Format: (t|b)<startprice>:list:s<STEPS>[:p<PLANE>(u|d)]
+        descending = (self.interval <= 0) ^ self.flip
+        tailprice = self.pricelist[-1]
+        headerprice = self.startprice if not self.flip else tailprice
+        return "%s:%s:%s" % (
+            "%s%g"%("t" if descending else "b", headerprice),
+            "list",
+            "s%g"%(self.steps)
+        )
+
+    def getDescriptiveContext(self):
+        context = {}
+        context['steps'] = self.steps
+        context['plane'] = self.plane
+        context['structure'] = "explicit prices"
+        return context
+
+    def getPrices(self):
+        prices = [d for d in self.pricelist]
+        if self.flip:
+            prices.reverse()
+        return prices
+
+    @property
+    def prices(self):
+        return self.getPrices()
 
 
 class IntervalPrices:
